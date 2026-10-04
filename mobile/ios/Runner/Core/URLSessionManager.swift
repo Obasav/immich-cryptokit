@@ -239,26 +239,20 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
     _ session: URLSession,
     completion: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
   ) {
-    if #available(iOS 18.4, *) {
-      Task {
-        if let identity = await managedClientIdentity() {
-          useClientIdentity(identity, session: session, completion: completion)
-          return
-        }
-
-        handleImportedClientCertificate(session, completion: completion)
+    Task {
+      if let identity = await managedClientIdentity() {
+        useClientIdentity(identity, session: session, completion: completion)
+        return
       }
-      return
-    }
 
-    handleImportedClientCertificate(session, completion: completion)
+      handleImportedClientCertificate(session, completion: completion)
+    }
   }
 
   /// Resolves an MDM-provisioned client identity through Apple's ManagedApp framework.
   ///
   /// Fetch the identity when a client-certificate challenge occurs rather than persisting
   /// the returned reference. This supports managed identities backed by non-exportable keys.
-  @available(iOS 18.4, *)
   private func managedClientIdentity() async -> SecIdentity? {
     let provider = ManagedAppIdentitiesProvider()
     return try? await provider.identity(withIdentifier: MANAGED_CLIENT_CERT_IDENTIFIER)
