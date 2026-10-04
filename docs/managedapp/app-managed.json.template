@@ -7,9 +7,6 @@
     "InstallBehavior": {
       "Install": "Required"
     },
-    "UpdateBehavior": {
-      "AutomaticAppUpdates": "AlwaysOff"
-    },
     "AppConfig": {
       "Identities": [
         {
