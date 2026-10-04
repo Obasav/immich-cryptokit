@@ -57,6 +57,57 @@ The AppManaged declaration maps that identifier to the ACME asset declaration:
 
 The ManagedApp framework then exposes the resulting identity to Immich as a `SecIdentity`.
 
+## Client certificate source
+
+The iOS client certificate settings offer three modes:
+
+| Mode | Behavior |
+| --- | --- |
+| Automatic (default) | Prefer the managed identity. If it is unavailable or lookup fails, allow the existing imported certificate as a fallback. Diagnostics retain the managed lookup outcome and the certificate source used. |
+| Imported certificate only | Use the existing PKCS#12 import path without requesting a managed identity for TLS. |
+| Require managed identity | Cancel client-certificate authentication if the managed identity cannot be obtained. Never read or use the locally imported identity as a fallback. |
+
+Import and Remove affect only Immich's imported certificate. They do not alter MDM identities.
+Mode changes apply to new TLS authentications; transfers on an already authenticated connection
+may complete with the previous identity. The foreground session is recreated on a mode change.
+
+"Require managed identity" selects the source of the identity, not its key provenance. ManagedApp
+also supports managed PKCS#12 and SCEP identities. For hardware-only access, provision this ACME
+asset with `HardwareBound` and `Attest` enabled, require validated attestation and CSR key matching
+at the CA, and have Traefik require and verify certificates from that issuance policy. A server
+that never requests a client certificate does not establish mTLS merely because this mode is set.
+
+## Approved server origins
+
+Both imported and managed identities are restricted to the explicitly configured HTTPS server
+origins, including their ports. A pre-login server entered by the user is temporarily approved
+only while server discovery and validation run. Overlapping validations have independent leases.
+Redirect targets and discovery responses cannot add origins to the approved list. If discovery
+returns an API on another origin, enter that API URL directly or configure it as an alternate
+endpoint first. The origin and selection mode are checked again after asynchronous identity lookup.
+
+## Device diagnostics
+
+Expand Managed identity diagnostics in the iOS client certificate settings:
+
+1. Check identity reports the configured identifiers, lookup outcome, certificate and private-key
+   reference availability, and public-key type/size. A manually installed ACME profile does not
+   substitute for an identity assigned to the app through `AppConfig.Identities`.
+2. Test key additionally signs a fresh random message and verifies it against the certificate's
+   public key. It uses the private-key reference without exporting it. A verified signature proves
+   key usability, while hardware binding is established by CA-validated ACME attestation.
+3. Test connection requests the configured server's `/api/server/ping` endpoint through a new
+   session using the same configuration factory and TLS challenge handler as Immich. It reports
+   the HTTP outcome and the identity source selected for that test. If no client-certificate
+   challenge occurs, the result explicitly does not claim to prove mTLS.
+
+Diagnostics never return certificate contents, certificate subjects, private-key material, full
+key-attribute dictionaries, or signatures to Flutter, logs, or persistent storage.
+
+For locked-screen uploads, consider setting the ACME asset's `Accessible` value to
+`AfterFirstUnlock` and test foreground uploads, background transfers, and reboot/first-unlock
+behavior on the actual device. The template retains Apple's default until that policy is chosen.
+
 ## Per-device ClientIdentifier
 
 Do not deploy one shared `ClientIdentifier` to every device.

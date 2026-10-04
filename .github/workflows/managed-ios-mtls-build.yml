@@ -26,6 +26,14 @@ jobs:
       - name: Select Xcode 26.2
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
+      - name: Test client certificate origin and fallback policies
+        run: |
+          xcrun swiftc -swift-version 5 \
+            mobile/ios/Runner/Core/ClientCertificatePolicy.swift \
+            mobile/ios/Tests/ClientCertificatePolicy/main.swift \
+            -o "$RUNNER_TEMP/immich-client-certificate-policy-tests"
+          "$RUNNER_TEMP/immich-client-certificate-policy-tests"
+
       - name: Setup Immich toolchain
         uses: immich-app/devtools/actions/use-mise@06a9ef925332c91be647d6256642b86b398592c8 # use-mise-action-v3.2.1
         with:
@@ -46,6 +54,10 @@ jobs:
 
       - name: Generate all Immich mobile sources
         run: mise //mobile:codegen
+
+      - name: Test managed identity settings bridge and discovery origins
+        working-directory: mobile
+        run: flutter test test/platform/managed_client_identity_test.dart
 
       - name: Compile Immich for iOS without code signing
         working-directory: mobile

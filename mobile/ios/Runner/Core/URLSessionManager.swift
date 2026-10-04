@@ -6,6 +6,7 @@ let CLIENT_CERT_LABEL = "app.alextran.immich.client_identity"
 let MANAGED_CLIENT_CERT_IDENTIFIER = "immich.mtls.client-identity"
 let HEADERS_KEY = "immich.request_headers"
 let SERVER_URLS_KEY = "immich.server_urls"
+let CLIENT_CERT_MODE_KEY = "immich.client_certificate_mode"
 let APP_GROUP = Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as! String
 let COOKIE_EXPIRY_DAYS: TimeInterval = 400
 
@@ -60,6 +61,24 @@ class URLSessionManager: NSObject {
   static let cookieStorage = HTTPCookieStorage.sharedCookieStorage(forGroupContainerIdentifier: APP_GROUP)
   private static var serverUrls: [String] = []
   private static var isSyncing = false
+  static let clientCertificateOrigins = ClientCertificateOriginPolicy()
+
+  static var clientCertificateMode: ClientCertificateMode {
+    ClientCertificateMode(rawValue: UserDefaults.group.string(forKey: CLIENT_CERT_MODE_KEY) ?? "") ?? .automatic
+  }
+
+  static func allowsClientCertificate(_ challenge: URLAuthenticationChallenge) -> Bool {
+    clientCertificateOrigins.allows(
+      challenge.protectionSpace,
+      configuredServerURLs: UserDefaults.group.stringArray(forKey: SERVER_URLS_KEY) ?? []
+    )
+  }
+
+  func setClientCertificateMode(_ mode: ClientCertificateMode) {
+    guard mode != Self.clientCertificateMode else { return }
+    UserDefaults.group.set(mode.rawValue, forKey: CLIENT_CERT_MODE_KEY)
+    recreateSession()
+  }
 
   var sessionPointer: UnsafeMutableRawPointer {
     Unmanaged.passUnretained(session).toOpaque()
@@ -146,10 +165,11 @@ class URLSessionManager: NSObject {
     }
   }
 
-  private static func buildSession(delegate: URLSessionManagerDelegate) -> URLSession {
+  static func buildSession(delegate: URLSessionManagerDelegate) -> URLSession {
     let config = URLSessionConfiguration.default
     config.urlCache = urlCache
     config.httpCookieStorage = cookieStorage
+    config.urlCredentialStorage = nil
     config.httpMaximumConnectionsPerHost = 64
     config.timeoutIntervalForRequest = 60
 
@@ -199,12 +219,32 @@ private extension URLSessionConfiguration {
     // After swizzle, this calls the original implementation
     let config = immich_background(withIdentifier: id)
     config.httpCookieStorage = URLSessionManager.cookieStorage
+    config.urlCredentialStorage = nil
     config.httpAdditionalHeaders = ["User-Agent": URLSessionManager.userAgent]
     return config
   }
 }
 
 class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWebSocketDelegate {
+  private let updateVideoProxy: Bool
+  private let diagnosticLock = NSLock()
+  private var lastTLSStatus: [String: String] = [:]
+
+  init(updateVideoProxy: Bool = true) {
+    self.updateVideoProxy = updateVideoProxy
+    super.init()
+  }
+
+  var clientCertificateTLSStatus: [String: String] {
+    diagnosticLock.withLock { lastTLSStatus }
+  }
+
+  private func recordClientCertificateStatus(source: String, lookup: String) {
+    diagnosticLock.withLock {
+      lastTLSStatus = ["lastCredentialSource": source, "lastManagedLookup": lookup]
+    }
+  }
+
   func urlSession(
     _ session: URLSession,
     didReceive challenge: URLAuthenticationChallenge,
@@ -229,7 +269,8 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
     task: URLSessionTask? = nil
   ) {
     switch challenge.protectionSpace.authenticationMethod {
-    case NSURLAuthenticationMethodClientCertificate: handleClientCertificate(session, completion: completionHandler)
+    case NSURLAuthenticationMethodClientCertificate:
+      handleClientCertificate(session, challenge: challenge, completion: completionHandler)
     case NSURLAuthenticationMethodHTTPBasic: handleBasicAuth(session, task: task, completion: completionHandler)
     default: completionHandler(.performDefaultHandling, nil)
     }
@@ -237,32 +278,61 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
 
   private func handleClientCertificate(
     _ session: URLSession,
+    challenge: URLAuthenticationChallenge,
     completion: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
   ) {
+    guard URLSessionManager.allowsClientCertificate(challenge), challenge.previousFailureCount == 0 else {
+      recordClientCertificateStatus(source: "blocked", lookup: "not_requested")
+      completion(.cancelAuthenticationChallenge, nil)
+      return
+    }
+
+    let mode = URLSessionManager.clientCertificateMode
     Task {
-      if let identity = await managedClientIdentity() {
-        useClientIdentity(identity, session: session, completion: completion)
+      var managedIdentity: SecIdentity?
+      var availability: ManagedIdentityAvailability = .missing
+      var lookup = "not_requested"
+      if mode != .importedOnly {
+        do {
+          managedIdentity = try await ManagedAppIdentitiesProvider()
+            .identity(withIdentifier: MANAGED_CLIENT_CERT_IDENTIFIER)
+          availability = .available
+          lookup = "available"
+        } catch {
+          lookup = managedIdentityErrorCode(error)
+          availability = lookup == "not_provisioned" ? .missing : .failed
+        }
+      }
+
+      // Recheck after the asynchronous lookup: settings or the approved origin can change.
+      guard mode == URLSessionManager.clientCertificateMode,
+            URLSessionManager.allowsClientCertificate(challenge) else {
+        recordClientCertificateStatus(source: "blocked", lookup: "policy_changed")
+        completion(.cancelAuthenticationChallenge, nil)
         return
       }
 
-      handleImportedClientCertificate(session, completion: completion)
+      let importedIdentity = mode != .managedOnly && managedIdentity == nil ? importedClientIdentity() : nil
+      switch mode.selection(managed: availability, importedAvailable: importedIdentity != nil) {
+      case .managed:
+        guard let identity = managedIdentity else { return completion(.cancelAuthenticationChallenge, nil) }
+        recordClientCertificateStatus(source: "managed", lookup: lookup)
+        useClientIdentity(identity, session: session, completion: completion)
+      case .imported:
+        guard let identity = importedIdentity else { return completion(.cancelAuthenticationChallenge, nil) }
+        recordClientCertificateStatus(source: "imported", lookup: lookup)
+        useClientIdentity(identity, session: session, completion: completion)
+      case .defaultHandling:
+        recordClientCertificateStatus(source: "none", lookup: lookup)
+        completion(.performDefaultHandling, nil)
+      case .cancel:
+        recordClientCertificateStatus(source: "blocked", lookup: lookup)
+        completion(.cancelAuthenticationChallenge, nil)
+      }
     }
   }
 
-  /// Resolves an MDM-provisioned client identity through Apple's ManagedApp framework.
-  ///
-  /// Fetch the identity when a client-certificate challenge occurs rather than persisting
-  /// the returned reference. This supports managed identities backed by non-exportable keys.
-  private func managedClientIdentity() async -> SecIdentity? {
-    let provider = ManagedAppIdentitiesProvider()
-    return try? await provider.identity(withIdentifier: MANAGED_CLIENT_CERT_IDENTIFIER)
-  }
-
-  /// Existing PKCS#12-backed client identity path.
-  private func handleImportedClientCertificate(
-    _ session: URLSession,
-    completion: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-  ) {
+  private func importedClientIdentity() -> SecIdentity? {
     let query: [String: Any] = [
       kSecClass as String: kSecClassIdentity,
       kSecAttrLabel as String: CLIENT_CERT_LABEL,
@@ -272,9 +342,9 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     if status == errSecSuccess, let identity = item {
-      return useClientIdentity(identity as! SecIdentity, session: session, completion: completion)
+      return (identity as! SecIdentity)
     }
-    completion(.performDefaultHandling, nil)
+    return nil
   }
 
   private func useClientIdentity(
@@ -287,7 +357,7 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
       certificates: nil,
       persistence: .forSession
     )
-    if #available(iOS 15, *) {
+    if updateVideoProxy {
       VideoProxyServer.shared.session = session
     }
     completion(.useCredential, credential)
@@ -304,7 +374,7 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
     else {
       return completion(.performDefaultHandling, nil)
     }
-    if #available(iOS 15, *) {
+    if updateVideoProxy {
       VideoProxyServer.shared.session = session
     }
     let credential = URLCredential(user: user, password: password, persistence: .forSession)

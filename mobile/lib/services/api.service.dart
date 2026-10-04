@@ -7,6 +7,7 @@ import 'package:immich_mobile/domain/models/store.model.dart';
 import 'package:immich_mobile/entities/store.entity.dart';
 import 'package:immich_mobile/infrastructure/repositories/network.repository.dart';
 import 'package:immich_mobile/infrastructure/repositories/settings.repository.dart';
+import 'package:immich_mobile/platform/managed_client_identity.dart';
 import 'package:immich_mobile/utils/debug_print.dart';
 import 'package:immich_mobile/utils/url_helper.dart';
 import 'package:logging/logging.dart';
@@ -85,6 +86,8 @@ class ApiService {
 
     // Save in local database for next startup
     await Store.put(StoreKey.serverEndpoint, endpoint);
+    // Publish the approved endpoint before the first authenticated request.
+    await updateHeaders();
     return endpoint;
   }
 
@@ -97,19 +100,30 @@ class ApiService {
   ///  path   - optional
   Future<String> resolveEndpoint(String serverUrl) async {
     String url = normalizeServerUrl(serverUrl);
+    final validation = Platform.isIOS ? await ManagedClientIdentityApi.beginServerValidation(url) : null;
+    try {
+      // Only the explicitly selected URL is temporarily approved for client TLS.
+      // Discovery responses and redirects cannot approve another origin.
+      final wellKnownEndpoint = await _getWellKnownEndpoint(url);
+      if (wellKnownEndpoint.isNotEmpty) {
+        final discovered = normalizeServerUrl(wellKnownEndpoint);
+        if (Platform.isIOS &&
+            ![url, ...getServerUrls()].any((approved) => clientCertificateOriginsMatch(approved, discovered))) {
+          throw ApiException(503, "Enter the discovered server URL directly, or add it as an alternate endpoint.");
+        }
+        url = discovered;
+      }
 
-    // Check for /.well-known/immich
-    final wellKnownEndpoint = await _getWellKnownEndpoint(url);
-    if (wellKnownEndpoint.isNotEmpty) {
-      url = normalizeServerUrl(wellKnownEndpoint);
+      if (!await _isEndpointAvailable(url)) {
+        throw ApiException(503, "Server is not reachable");
+      }
+
+      return url;
+    } finally {
+      if (validation != null) {
+        await ManagedClientIdentityApi.endServerValidation(validation);
+      }
     }
-
-    if (!await _isEndpointAvailable(url)) {
-      throw ApiException(503, "Server is not reachable");
-    }
-
-    // Otherwise, assume the URL provided is the api endpoint
-    return url;
   }
 
   Future<bool> _isEndpointAvailable(String serverUrl) async {
