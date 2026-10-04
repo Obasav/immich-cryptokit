@@ -12,6 +12,7 @@
 		467DA6EAF83F3481F8BD94AB /* Pods_ShareExtension.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8AB817AA297EDEC88B23F3F6 /* Pods_ShareExtension.framework */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
+		A7B4C0022F9A000000000001 /* ManagedApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A7B4C0012F9A000000000001 /* ManagedApp.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
@@ -106,6 +107,7 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A7B4C0012F9A000000000001 /* ManagedApp.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ManagedApp.framework; path = System/Library/Frameworks/ManagedApp.framework; sourceTree = SDKROOT; };
 		A01DD6982F7F43B40049AB63 /* ImageRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRequest.swift; sourceTree = "<group>"; };
 		B21E34A92E5AFD210031FDB9 /* BackgroundWorkerApiImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundWorkerApiImpl.swift; sourceTree = "<group>"; };
 		B21E34AB2E5B09100031FDB9 /* BackgroundWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundWorker.swift; sourceTree = "<group>"; };
@@ -197,6 +199,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
+				A7B4C0022F9A000000000001 /* ManagedApp.framework in Frameworks */,
 				FEE084F82EC172460045228E /* SQLiteData in Frameworks */,
 				FEE084FB2EC1725A0045228E /* RawStructuredFieldValues in Frameworks */,
 				FEE084FD2EC1725A0045228E /* StructuredFieldValues in Frameworks */,
@@ -240,6 +243,7 @@
 		1754452DD81DA6620E279E51 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				A7B4C0012F9A000000000001 /* ManagedApp.framework */,
 				F0B57D392DF764BD00DC5BCC /* WidgetKit.framework */,
 				F0B57D3B2DF764BD00DC5BCC /* SwiftUI.framework */,
 				CC499FBCE6B29B2DAFED7130 /* Pods_Runner.framework */,
