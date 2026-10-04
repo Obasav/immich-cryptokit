@@ -58,6 +58,24 @@ jobs:
       - name: Generate all Immich mobile sources
         run: mise //mobile:codegen
 
+      - name: Check Dart formatting for the managed identity changes
+        working-directory: mobile
+        run: |
+          dart format \
+            lib/platform/managed_client_identity.dart \
+            lib/services/api.service.dart \
+            lib/widgets/settings/ssl_client_cert_settings.dart \
+            test/platform/managed_client_identity_test.dart
+          git diff --exit-code -- \
+            lib/platform/managed_client_identity.dart \
+            lib/services/api.service.dart \
+            lib/widgets/settings/ssl_client_cert_settings.dart \
+            test/platform/managed_client_identity_test.dart
+
+      - name: Analyze Dart without upstream license requirements
+        working-directory: mobile
+        run: dart analyze --fatal-infos
+
       - name: Test managed identity settings bridge and discovery origins
         working-directory: mobile
         run: flutter test test/platform/managed_client_identity_test.dart
