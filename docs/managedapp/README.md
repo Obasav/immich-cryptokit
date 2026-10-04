@@ -84,14 +84,25 @@ The template requests:
 With `HardwareBound: true`, Apple generates the private key in the Secure Enclave and the key is
 not exportable.
 
-## Distribution modes
+## Distribution model
 
-For early developer-mode testing, replace `<IMMICH_BUNDLE_ID>` with the bundle identifier of the
-signed test build.
+The template uses Apple's enterprise `ManifestURL` form for `com.apple.configuration.app.managed`.
+That is the appropriate DDM shape for a custom-signed Immich fork rather than an App Store binary.
 
-For a later privately distributed/enterprise build, the AppManaged declaration may need to use the
-appropriate Apple-supported app installation mechanism (for example a ManifestURL) instead of the
-BundleID-only test form. Keep the AppConfig/Identities mapping unchanged.
+The manifest referenced by `<IMMICH_ENTERPRISE_MANIFEST_URL>` must describe the signed IPA that the
+device can install. Keep the `AppConfig.Identities` mapping unchanged across build updates.
+
+## Fleet note
+
+Fleet supports DDM assets and `com.apple.configuration.app.managed`, but its current documentation
+states that an app referenced by `app.managed` must already be installed and managed through
+Fleet's VPP functionality for the configuration to apply on-device.
+
+That is a Fleet implementation constraint rather than an Apple ManagedApp constraint. Apple's
+schema supports the enterprise `ManifestURL` form used by this template.
+
+For this fork, do not assume that uploading these declarations to Fleet is sufficient until the
+custom-app management path has been validated on a test device.
 
 ## Required deployment sequence
 
