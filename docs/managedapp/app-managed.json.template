@@ -3,9 +3,12 @@
   "Identifier": "<APP_MANAGED_DECLARATION_UUID>",
   "ServerToken": "<APP_MANAGED_SERVER_TOKEN>",
   "Payload": {
-    "BundleID": "<IMMICH_BUNDLE_ID>",
+    "ManifestURL": "<IMMICH_ENTERPRISE_MANIFEST_URL>",
     "InstallBehavior": {
       "Install": "Required"
+    },
+    "UpdateBehavior": {
+      "AutomaticAppUpdates": "AlwaysOff"
     },
     "AppConfig": {
       "Identities": [
