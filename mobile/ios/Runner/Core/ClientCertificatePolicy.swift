@@ -40,7 +40,7 @@ struct ClientCertificateOrigin: Hashable {
   init?(protectionSpace: URLProtectionSpace) {
     guard protectionSpace.proxyType == nil,
           let scheme = protectionSpace.protocol?.lowercased(),
-          scheme == "https" || scheme == "wss" else { return nil }
+          scheme == "https" else { return nil }
     self.init(host: protectionSpace.host, port: protectionSpace.port)
   }
 

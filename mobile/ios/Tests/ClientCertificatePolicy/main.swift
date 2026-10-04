@@ -1,14 +1,14 @@
 import Foundation
 
-private func expectTrue(_ value: @autoclosure () -> Bool, file: StaticString = #filePath, line: UInt = #line) {
+private func expectTrue(_ value: @autoclosure () -> Bool, file: StaticString = #file, line: UInt = #line) {
   precondition(value(), "Expected true", file: file, line: line)
 }
 
-private func expectFalse(_ value: @autoclosure () -> Bool, file: StaticString = #filePath, line: UInt = #line) {
+private func expectFalse(_ value: @autoclosure () -> Bool, file: StaticString = #file, line: UInt = #line) {
   precondition(!value(), "Expected false", file: file, line: line)
 }
 
-private func expectEqual<T: Equatable>(_ actual: T, _ expected: T, file: StaticString = #filePath, line: UInt = #line) {
+private func expectEqual<T: Equatable>(_ actual: T, _ expected: T, file: StaticString = #file, line: UInt = #line) {
   precondition(actual == expected, "Expected \(expected), got \(actual)", file: file, line: line)
 }
 
@@ -24,7 +24,6 @@ final class ClientCertificatePolicyTests {
     let policy = ClientCertificateOriginPolicy()
     expectTrue(policy.allows(challenge(), configuredServerURLs: [server]))
     expectTrue(policy.allows(challenge("IMMICH.EXAMPLE."), configuredServerURLs: [server]))
-    expectTrue(policy.allows(challenge(scheme: "wss"), configuredServerURLs: [server]))
     expectTrue(policy.allows(challenge(port: 8443), configuredServerURLs: ["https://immich.example:8443"]))
   }
 
@@ -38,6 +37,7 @@ final class ClientCertificatePolicyTests {
   func testRejectsInsecureAndUnconfiguredOrigins() {
     let policy = ClientCertificateOriginPolicy()
     expectFalse(policy.allows(challenge(scheme: "http"), configuredServerURLs: [server]))
+    expectFalse(policy.allows(challenge(scheme: "wss"), configuredServerURLs: [server]))
     expectFalse(policy.allows(challenge(), configuredServerURLs: []))
     expectFalse(policy.allows(challenge(), configuredServerURLs: ["http://immich.example", "/api"]))
     expectFalse(policy.allows(challenge(port: 0), configuredServerURLs: [server]))
