@@ -33,6 +33,7 @@ jobs:
           working_directory: ./mobile
 
       - name: Show toolchain
+        working-directory: mobile
         run: |
           xcodebuild -version
           flutter --version
