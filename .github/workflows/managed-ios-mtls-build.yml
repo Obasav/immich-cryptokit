@@ -1,0 +1,82 @@
+name: Validate ManagedApp iOS Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'open-api/**'
+      - 'i18n/**'
+      - '.github/workflows/managed-ios-mtls-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Compile iOS without signing
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Test client certificate origin and fallback policies
+        run: |
+          xcrun swiftc -swift-version 5 \
+            mobile/ios/Runner/Core/ClientCertificatePolicy.swift \
+            mobile/ios/Tests/ClientCertificatePolicy/main.swift \
+            -o "$RUNNER_TEMP/immich-client-certificate-policy-tests"
+          "$RUNNER_TEMP/immich-client-certificate-policy-tests"
+
+      - name: Setup Immich toolchain
+        uses: immich-app/devtools/actions/use-mise@06a9ef925332c91be647d6256642b86b398592c8 # use-mise-action-v3.2.1
+        with:
+          github_token: ${{ github.token }}
+          working_directory: ./mobile
+
+      - name: Show toolchain
+        working-directory: mobile
+        run: |
+          xcodebuild -version
+          flutter --version
+          mise --version
+          ruby --version
+          pod --version
+
+      - name: Install Immich mobile dependencies
+        run: mise //mobile:install:ci
+
+      - name: Generate all Immich mobile sources
+        run: mise //mobile:codegen
+
+      - name: Check Dart formatting for the managed identity changes
+        working-directory: mobile
+        run: |
+          dart format \
+            lib/platform/managed_client_identity.dart \
+            lib/services/api.service.dart \
+            lib/widgets/settings/ssl_client_cert_settings.dart \
+            test/platform/managed_client_identity_test.dart
+          git diff --exit-code -- \
+            lib/platform/managed_client_identity.dart \
+            lib/services/api.service.dart \
+            lib/widgets/settings/ssl_client_cert_settings.dart \
+            test/platform/managed_client_identity_test.dart
+
+      - name: Analyze Dart without upstream license requirements
+        working-directory: mobile
+        run: dart analyze --fatal-infos
+
+      - name: Test managed identity settings bridge and discovery origins
+        working-directory: mobile
+        run: flutter test test/platform/managed_client_identity_test.dart
+
+      - name: Compile Immich for iOS without code signing
+        working-directory: mobile
+        run: flutter build ios --debug --no-codesign

@@ -1,0 +1,15 @@
+{
+  "Type": "com.apple.asset.credential.acme",
+  "Identifier": "<ACME_ASSET_DECLARATION_UUID>",
+  "ServerToken": "<ACME_ASSET_SERVER_TOKEN>",
+  "Payload": {
+    "Reference": {
+      "DataURL": "<ACME_CREDENTIAL_DATA_URL>",
+      "ContentType": "application/json"
+    },
+    "Authentication": {
+      "Type": "MDM"
+    },
+    "Accessible": "Default"
+  }
+}

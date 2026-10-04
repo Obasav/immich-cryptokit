@@ -1,0 +1,10 @@
+{
+  "Type": "com.apple.activation.simple",
+  "Identifier": "<ACTIVATION_DECLARATION_UUID>",
+  "ServerToken": "<ACTIVATION_SERVER_TOKEN>",
+  "Payload": {
+    "StandardConfigurations": [
+      "<APP_MANAGED_DECLARATION_UUID>"
+    ]
+  }
+}
