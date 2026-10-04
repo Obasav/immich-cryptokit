@@ -1,7 +1,9 @@
 import Foundation
+import ManagedApp
 import native_video_player
 
 let CLIENT_CERT_LABEL = "app.alextran.immich.client_identity"
+let MANAGED_CLIENT_CERT_IDENTIFIER = "immich.mtls.client-identity"
 let HEADERS_KEY = "immich.request_headers"
 let SERVER_URLS_KEY = "immich.server_urls"
 let APP_GROUP = Bundle.main.object(forInfoDictionaryKey: "AppGroupId") as! String
@@ -237,6 +239,36 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
     _ session: URLSession,
     completion: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
   ) {
+    if #available(iOS 18.4, *) {
+      Task {
+        if let identity = await managedClientIdentity() {
+          useClientIdentity(identity, session: session, completion: completion)
+          return
+        }
+
+        handleImportedClientCertificate(session, completion: completion)
+      }
+      return
+    }
+
+    handleImportedClientCertificate(session, completion: completion)
+  }
+
+  /// Resolves an MDM-provisioned client identity through Apple's ManagedApp framework.
+  ///
+  /// Fetch the identity when a client-certificate challenge occurs rather than persisting
+  /// the returned reference. This supports managed identities backed by non-exportable keys.
+  @available(iOS 18.4, *)
+  private func managedClientIdentity() async -> SecIdentity? {
+    let provider = ManagedAppIdentitiesProvider()
+    return try? await provider.identity(withIdentifier: MANAGED_CLIENT_CERT_IDENTIFIER)
+  }
+
+  /// Existing PKCS#12-backed client identity path.
+  private func handleImportedClientCertificate(
+    _ session: URLSession,
+    completion: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
     let query: [String: Any] = [
       kSecClass as String: kSecClassIdentity,
       kSecAttrLabel as String: CLIENT_CERT_LABEL,
@@ -246,15 +278,25 @@ class URLSessionManagerDelegate: NSObject, URLSessionTaskDelegate, URLSessionWeb
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     if status == errSecSuccess, let identity = item {
-      let credential = URLCredential(identity: identity as! SecIdentity,
-                                     certificates: nil,
-                                     persistence: .forSession)
-      if #available(iOS 15, *) {
-        VideoProxyServer.shared.session = session
-      }
-      return completion(.useCredential, credential)
+      return useClientIdentity(identity as! SecIdentity, session: session, completion: completion)
     }
     completion(.performDefaultHandling, nil)
+  }
+
+  private func useClientIdentity(
+    _ identity: SecIdentity,
+    session: URLSession,
+    completion: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    let credential = URLCredential(
+      identity: identity,
+      certificates: nil,
+      persistence: .forSession
+    )
+    if #available(iOS 15, *) {
+      VideoProxyServer.shared.session = session
+    }
+    completion(.useCredential, credential)
   }
 
   private func handleBasicAuth(
