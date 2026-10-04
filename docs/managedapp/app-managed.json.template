@@ -1,0 +1,19 @@
+{
+  "Type": "com.apple.configuration.app.managed",
+  "Identifier": "<APP_MANAGED_DECLARATION_UUID>",
+  "ServerToken": "<APP_MANAGED_SERVER_TOKEN>",
+  "Payload": {
+    "BundleID": "<IMMICH_BUNDLE_ID>",
+    "InstallBehavior": {
+      "Install": "Required"
+    },
+    "AppConfig": {
+      "Identities": [
+        {
+          "Identifier": "immich.mtls.client-identity",
+          "AssetReference": "<ACME_ASSET_DECLARATION_UUID>"
+        }
+      ]
+    }
+  }
+}
