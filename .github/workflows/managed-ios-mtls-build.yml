@@ -1,0 +1,49 @@
+name: Validate ManagedApp iOS Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/managed-ios-mtls-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Compile iOS without signing
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Install Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          flutter --version
+          ruby --version
+          pod --version
+
+      - name: Install Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        working-directory: mobile/ios
+        run: pod install
+
+      - name: Compile Immich for iOS without code signing
+        working-directory: mobile
+        run: flutter build ios --debug --no-codesign
