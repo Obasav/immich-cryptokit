@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'mobile/**'
+      - 'open-api/**'
+      - 'i18n/**'
       - '.github/workflows/managed-ios-mtls-build.yml'
 
 permissions:
@@ -17,59 +19,32 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Select Xcode 26.2
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
-      - name: Install Flutter 3.47.2
-        uses: subosito/flutter-action@v2
+      - name: Setup Immich toolchain
+        uses: immich-app/devtools/actions/use-mise@06a9ef925332c91be647d6256642b86b398592c8 # use-mise-action-v3.2.1
         with:
-          flutter-version: '3.47.2'
-          channel: stable
-          cache: true
+          github_token: ${{ github.token }}
+          working_directory: ./mobile
 
       - name: Show toolchain
         run: |
           xcodebuild -version
           flutter --version
+          mise --version
           ruby --version
           pod --version
 
-      - name: Install Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
+      - name: Install Immich mobile dependencies
+        run: mise //mobile:install:ci
 
-      - name: Install OpenAPI generator
-        run: npm install --global @openapitools/openapi-generator-cli@2.41.0
-
-      - name: Generate Immich Dart OpenAPI client
-        working-directory: open-api
-        run: bash ./bin/generate-dart-sdk.sh
-
-      - name: Install Flutter dependencies
-        working-directory: mobile
-        run: flutter pub get
-
-      - name: Generate Immich mobile sources
-        working-directory: mobile
-        run: |
-          dart run drift_dev make-migrations
-          dart run build_runner build
-          dart run drift_dev schema generate --data-classes --companions drift_schemas/main/ test/drift/main/generated/
-          for file in pigeon/*.dart; do
-            dart run pigeon --input "$file"
-          done
-          dart format lib/platform/
-          dart run easy_localization:generate -S ../i18n
-          dart run bin/generate_keys.dart
-          dart format lib/generated/codegen_loader.g.dart lib/generated/translations.g.dart
-
-      - name: Install CocoaPods dependencies
-        working-directory: mobile/ios
-        run: pod install
+      - name: Generate all Immich mobile sources
+        run: mise //mobile:codegen
 
       - name: Compile Immich for iOS without code signing
         working-directory: mobile
