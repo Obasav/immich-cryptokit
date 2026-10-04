@@ -1,7 +1,18 @@
 import Foundation
-import XCTest
 
-final class ClientCertificatePolicyTests: XCTestCase {
+private func expectTrue(_ value: @autoclosure () -> Bool, file: StaticString = #filePath, line: UInt = #line) {
+  precondition(value(), "Expected true", file: file, line: line)
+}
+
+private func expectFalse(_ value: @autoclosure () -> Bool, file: StaticString = #filePath, line: UInt = #line) {
+  precondition(!value(), "Expected false", file: file, line: line)
+}
+
+private func expectEqual<T: Equatable>(_ actual: T, _ expected: T, file: StaticString = #filePath, line: UInt = #line) {
+  precondition(actual == expected, "Expected \(expected), got \(actual)", file: file, line: line)
+}
+
+final class ClientCertificatePolicyTests {
   private let server = "https://immich.example/api"
 
   private func challenge(_ host: String = "immich.example", port: Int = 443, scheme: String = "https") -> URLProtectionSpace {
@@ -11,56 +22,56 @@ final class ClientCertificatePolicyTests: XCTestCase {
 
   func testExactApprovedHTTPSOrigin() {
     let policy = ClientCertificateOriginPolicy()
-    XCTAssertTrue(policy.allows(challenge(), configuredServerURLs: [server]))
-    XCTAssertTrue(policy.allows(challenge("IMMICH.EXAMPLE."), configuredServerURLs: [server]))
-    XCTAssertTrue(policy.allows(challenge(scheme: "wss"), configuredServerURLs: [server]))
-    XCTAssertTrue(policy.allows(challenge(port: 8443), configuredServerURLs: ["https://immich.example:8443"]))
+    expectTrue(policy.allows(challenge(), configuredServerURLs: [server]))
+    expectTrue(policy.allows(challenge("IMMICH.EXAMPLE."), configuredServerURLs: [server]))
+    expectTrue(policy.allows(challenge(scheme: "wss"), configuredServerURLs: [server]))
+    expectTrue(policy.allows(challenge(port: 8443), configuredServerURLs: ["https://immich.example:8443"]))
   }
 
   func testRejectsRedirectHostsAndPortChanges() {
     let policy = ClientCertificateOriginPolicy()
-    XCTAssertFalse(policy.allows(challenge("other.example"), configuredServerURLs: [server]))
-    XCTAssertFalse(policy.allows(challenge("immich.example.attacker.test"), configuredServerURLs: [server]))
-    XCTAssertFalse(policy.allows(challenge(port: 8443), configuredServerURLs: [server]))
+    expectFalse(policy.allows(challenge("other.example"), configuredServerURLs: [server]))
+    expectFalse(policy.allows(challenge("immich.example.attacker.test"), configuredServerURLs: [server]))
+    expectFalse(policy.allows(challenge(port: 8443), configuredServerURLs: [server]))
   }
 
   func testRejectsInsecureAndUnconfiguredOrigins() {
     let policy = ClientCertificateOriginPolicy()
-    XCTAssertFalse(policy.allows(challenge(scheme: "http"), configuredServerURLs: [server]))
-    XCTAssertFalse(policy.allows(challenge(), configuredServerURLs: []))
-    XCTAssertFalse(policy.allows(challenge(), configuredServerURLs: ["http://immich.example", "/api"]))
-    XCTAssertFalse(policy.allows(challenge(port: 0), configuredServerURLs: [server]))
+    expectFalse(policy.allows(challenge(scheme: "http"), configuredServerURLs: [server]))
+    expectFalse(policy.allows(challenge(), configuredServerURLs: []))
+    expectFalse(policy.allows(challenge(), configuredServerURLs: ["http://immich.example", "/api"]))
+    expectFalse(policy.allows(challenge(port: 0), configuredServerURLs: [server]))
   }
 
   func testRejectsProxyChallenges() {
     let proxy = URLProtectionSpace(proxyHost: "immich.example", port: 443,
                                   type: NSURLProtectionSpaceHTTPSProxy, realm: nil,
                                   authenticationMethod: NSURLAuthenticationMethodClientCertificate)
-    XCTAssertFalse(ClientCertificateOriginPolicy().allows(proxy, configuredServerURLs: [server]))
+    expectFalse(ClientCertificateOriginPolicy().allows(proxy, configuredServerURLs: [server]))
   }
 
   func testLocalAndExternalEndpointsAreExplicitApprovals() {
     let urls = [server, "https://immich.internal:8443"]
     let policy = ClientCertificateOriginPolicy()
-    XCTAssertTrue(policy.allows(challenge(), configuredServerURLs: urls))
-    XCTAssertTrue(policy.allows(challenge("immich.internal", port: 8443), configuredServerURLs: urls))
-    XCTAssertFalse(policy.allows(challenge("immich.internal"), configuredServerURLs: urls))
+    expectTrue(policy.allows(challenge(), configuredServerURLs: urls))
+    expectTrue(policy.allows(challenge("immich.internal", port: 8443), configuredServerURLs: urls))
+    expectFalse(policy.allows(challenge("immich.internal"), configuredServerURLs: urls))
   }
 
   func testIPv6Origin() {
-    XCTAssertTrue(ClientCertificateOriginPolicy().allows(
+    expectTrue(ClientCertificateOriginPolicy().allows(
       challenge("::1"), configuredServerURLs: ["https://[::1]:443/api"]
     ))
   }
 
   func testFirstLoginApprovalEndsWithValidation() {
     let policy = ClientCertificateOriginPolicy()
-    XCTAssertFalse(policy.allows(challenge(), configuredServerURLs: []))
+    expectFalse(policy.allows(challenge(), configuredServerURLs: []))
     let lease = policy.beginValidation(serverURL: server)
-    XCTAssertTrue(policy.allows(challenge(), configuredServerURLs: []))
-    XCTAssertFalse(policy.allows(challenge("discovered.example"), configuredServerURLs: []))
+    expectTrue(policy.allows(challenge(), configuredServerURLs: []))
+    expectFalse(policy.allows(challenge("discovered.example"), configuredServerURLs: []))
     policy.endValidation(lease)
-    XCTAssertFalse(policy.allows(challenge(), configuredServerURLs: []))
+    expectFalse(policy.allows(challenge(), configuredServerURLs: []))
   }
 
   func testOverlappingValidationsDoNotRevokeEachOther() {
@@ -68,33 +79,33 @@ final class ClientCertificatePolicyTests: XCTestCase {
     let first = policy.beginValidation(serverURL: server)
     let second = policy.beginValidation(serverURL: server)
     policy.endValidation(first)
-    XCTAssertTrue(policy.allows(challenge(), configuredServerURLs: []))
+    expectTrue(policy.allows(challenge(), configuredServerURLs: []))
     policy.endValidation(second)
-    XCTAssertFalse(policy.allows(challenge(), configuredServerURLs: []))
+    expectFalse(policy.allows(challenge(), configuredServerURLs: []))
   }
 
   func testRemovalOfConfiguredOriginTakesEffect() {
     let policy = ClientCertificateOriginPolicy()
-    XCTAssertTrue(policy.allows(challenge(), configuredServerURLs: [server]))
-    XCTAssertFalse(policy.allows(challenge(), configuredServerURLs: []))
+    expectTrue(policy.allows(challenge(), configuredServerURLs: [server]))
+    expectFalse(policy.allows(challenge(), configuredServerURLs: []))
   }
 
   func testStrictModeNeverUsesAnInstalledImport() {
-    XCTAssertEqual(ClientCertificateMode.managedOnly.selection(managed: .available, importedAvailable: true), .managed)
-    XCTAssertEqual(ClientCertificateMode.managedOnly.selection(managed: .missing, importedAvailable: true), .cancel)
-    XCTAssertEqual(ClientCertificateMode.managedOnly.selection(managed: .failed, importedAvailable: true), .cancel)
+    expectEqual(ClientCertificateMode.managedOnly.selection(managed: .available, importedAvailable: true), .managed)
+    expectEqual(ClientCertificateMode.managedOnly.selection(managed: .missing, importedAvailable: true), .cancel)
+    expectEqual(ClientCertificateMode.managedOnly.selection(managed: .failed, importedAvailable: true), .cancel)
   }
 
   func testAutomaticFallbackIsAnExplicitPolicy() {
-    XCTAssertEqual(ClientCertificateMode.automatic.selection(managed: .available, importedAvailable: true), .managed)
-    XCTAssertEqual(ClientCertificateMode.automatic.selection(managed: .missing, importedAvailable: true), .imported)
-    XCTAssertEqual(ClientCertificateMode.automatic.selection(managed: .failed, importedAvailable: true), .imported)
-    XCTAssertEqual(ClientCertificateMode.automatic.selection(managed: .missing, importedAvailable: false), .defaultHandling)
+    expectEqual(ClientCertificateMode.automatic.selection(managed: .available, importedAvailable: true), .managed)
+    expectEqual(ClientCertificateMode.automatic.selection(managed: .missing, importedAvailable: true), .imported)
+    expectEqual(ClientCertificateMode.automatic.selection(managed: .failed, importedAvailable: true), .imported)
+    expectEqual(ClientCertificateMode.automatic.selection(managed: .missing, importedAvailable: false), .defaultHandling)
   }
 
   func testImportedModeIgnoresManagedIdentityAvailability() {
-    XCTAssertEqual(ClientCertificateMode.importedOnly.selection(managed: .available, importedAvailable: true), .imported)
-    XCTAssertEqual(ClientCertificateMode.importedOnly.selection(managed: .available, importedAvailable: false), .defaultHandling)
+    expectEqual(ClientCertificateMode.importedOnly.selection(managed: .available, importedAvailable: true), .imported)
+    expectEqual(ClientCertificateMode.importedOnly.selection(managed: .available, importedAvailable: false), .defaultHandling)
   }
 
   static let allTests = [
@@ -113,4 +124,9 @@ final class ClientCertificatePolicyTests: XCTestCase {
   ]
 }
 
-XCTMain([testCase(ClientCertificatePolicyTests.allTests)])
+let suite = ClientCertificatePolicyTests()
+for (name, test) in ClientCertificatePolicyTests.allTests {
+  test(suite)()
+  print("PASS: \(name)")
+}
+print("Passed \(ClientCertificatePolicyTests.allTests.count) client certificate policy tests")
