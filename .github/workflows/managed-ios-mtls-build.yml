@@ -28,7 +28,10 @@ jobs:
 
       - name: Test client certificate origin and fallback policies
         run: |
+          TASK_XCTEST_FRAMEWORKS="$(xcode-select -p)/Platforms/MacOSX.platform/Developer/Library/Frameworks"
           xcrun swiftc -swift-version 5 \
+            -F "$TASK_XCTEST_FRAMEWORKS" \
+            -Xlinker -rpath -Xlinker "$TASK_XCTEST_FRAMEWORKS" \
             mobile/ios/Runner/Core/ClientCertificatePolicy.swift \
             mobile/ios/Tests/ClientCertificatePolicy/main.swift \
             -o "$RUNNER_TEMP/immich-client-certificate-policy-tests"
